@@ -20,12 +20,11 @@ LATEST_URL = 'https://sarigama.lk/playlist/latest/1a08d372-f979-4654-b180-f04e5e
 TRENDING_URL = 'https://sarigama.lk/playlist/trending/22adef1a-18c7-40a4-96d5-8f93ea1d7708'
 DEFAULT_ART_URL = 'https://sarigama.lk/img/default/song.png'
 
-path = ''
+CWD = os.getcwd()
 search_ptn = ''
 failed = True
 
-# !!!!!! Album Art Test!!!!!!
-# !!!!!! ID3 Tag Data Test!!!!!!
+# !!!!!! ID3 Tag Data ISSUE !!!!!!
 
 '''
 Samples
@@ -36,7 +35,7 @@ Song - https://sarigama.lk/sinhala-song/sanuka-wickramasinghe/dewliye-theme-song
 Search - https://sarigama.lk/api/v1/search/mas/{query}
 '''
 
-def download(song_url=''):
+def download(song_url, path):
 
     track_data = song_url.split('/')
     artist = ' '.join(track_data[4].split('-')).title()
@@ -103,12 +102,17 @@ def download(song_url=''):
                     with open(artname, 'wb') as cover:
                         cover.write(art.content)
              
-                    setID3(track_name, artname)
+                    setID3(title, artist, artname)
                     os.remove(artname)
+            main_input()
 
         else:
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
             main_input()
+
+    except KeyboardInterrupt:
+        print(Fore.RED+'[!] Task cancelled by user.'+Fore.RESET)
+        main_input()
 
     except Exception as e:
         print(Fore.RED+f'Somthing went wrong : {e}'+Fore.RESET)
@@ -123,7 +127,7 @@ def save_path() -> str:
         path = input(Fore.LIGHTGREEN_EX+'[+] Save Path (without file name) :').strip()
 
         if not path:
-            return ''
+            return CWD
 
         is_valid_path = os.path.isdir(path)
 
@@ -141,18 +145,18 @@ def save_path() -> str:
         save_path()
 
 
-def setID3(mp3_path:str, cover_art_path:str):
+def setID3(title:str, artist:str, cover_art_path:str):    
     
-    title = mp3_path.split(' - ')[0]
-    artist = mp3_path.split(' - ')[1]
-
     mp3 = eyed3.load(mp3_path)
     mp3.tag._images.remove('')
     
     # 3 is for front cover
     mp3.tag.images.set(3, open(cover_art_path,'rb').read(), 'image/jpeg')
     mp3.tag.title = title
-    mp3.tag.artist = artist   
+    mp3.tag.artist = artist
+    mp3.tag.album = title
+
+    mp3.tag.save()
 
 
 # Verify the command entered by user in main input section
@@ -226,26 +230,28 @@ def extract_songs_titles(artist_url, playlist=False):
 
             textRes = res.text
 
-            PTN = r'<a target="_blank" href="([a-z0-9\.:\/-]+)'
+            PTN = r'<a target="_blank" href="(https://sarigama.lk/sinhala-song/[a-z0-9\.:\/-]+)'
             reo = re.compile(PTN, flags=re.I)
             songlinks = reo.finditer(textRes)
 
             global title_links
-
+            
             for i, link in enumerate(songlinks, 1):
-                title = ' '.join(link.groups()[0].split(
-                    '/')[5].split('-')).title()
+                title1 = link.groups()[0]
+                title2 = title1.split('/')[5]
+                title = ' '.join(title2.split('-')).title()
+                
                 if playlist:
-                    artist = ' '.join(link.groups()[0].split(
-                        '/')[4].split('-')).title()
+                    artist = ' '.join(title1.split('/')[4].split('-')).title()
+                                    
                 title_links[str(i)] = (title, link.groups()[0], artist)
 
         else:
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
             main_input()
 
-    except Exception as e:
-        raise Exception(Fore.RED+'Check Your Internet Connection'+Fore.RESET)
+    except r.exceptions.ConnectionError as e:
+        raise Exception(Fore.RED+f'Check Your Internet Connection'+Fore.RESET)
 
 
 # Display artist's songs and perform downloads
@@ -287,25 +293,33 @@ def validate_song_no():
             main_input()
 
         else:        
-            global path
-            path = save_path()             
-                        
-            if track_no[0] == '0':
-                for song in title_links.values():
-                    link = song[1]
-                    download(link)
-
-            else:
-                for n in track_no:                    
-                    if n in title_links.keys():
-                        download(title_links[n][1])
-
-            if failed:
-                print(Fore.RED+'[!] Invalid Numbers\n'+Fore.RESET)
+           
+            if len(track_no) == 1 and track_no[0] not in title_links.keys():
+                print(Fore.RED+'[!] Invalid Number\n'+Fore.RESET)
                 validate_song_no()
 
             else:
-                main_input()
+
+                global path
+                path = save_path()
+
+                        
+                if track_no[0] == '0':
+                    for song in title_links.values():
+                        link = song[1]
+                        download(link, path)
+
+                else:
+                    for n in track_no:                    
+                        if n in title_links.keys():
+                            download(title_links[n][1], path)
+
+                if failed:
+                    print(Fore.RED+'[!] Invalid Numbers\n'+Fore.RESET)
+                    validate_song_no()
+
+                else:
+                    main_input()
 
     except KeyboardInterrupt:
         os.system('CLS')
@@ -390,7 +404,7 @@ def playlist_action(playlist_url):
         validate_song_no()
 
     except Exception as e:
-        print(Fore.RED+'Error:', e, '\n')
+        print(Fore.RED+f'[!] Error : {e}\n'+Fore.RESET)
         main_input()
 
 
