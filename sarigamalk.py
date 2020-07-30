@@ -1,9 +1,11 @@
-import requests as r
 import re
 import os
-from colorama import init, Fore, Style
+import eyed3
+import requests as r
 from tqdm import tqdm
-from art import tprint
+from random import choice
+from art import tprint, text2art
+from colorama import init, Fore, Style
 
 
 # initialize colorama module
@@ -16,8 +18,23 @@ artist_links = {}
 HOME_URL = 'https://sarigama.lk'
 LATEST_URL = 'https://sarigama.lk/playlist/latest/1a08d372-f979-4654-b180-f04e5e10c336'
 TRENDING_URL = 'https://sarigama.lk/playlist/trending/22adef1a-18c7-40a4-96d5-8f93ea1d7708'
-path = ''
+DEFAULT_ART_URL = 'https://sarigama.lk/img/default/song.png'
 
+path = ''
+search_ptn = ''
+failed = True
+
+# !!!!!! Album Art Test!!!!!!
+# !!!!!! ID3 Tag Data Test!!!!!!
+
+'''
+Samples
+Album Art - https://sarigama.lk/img/songs/appsong-68gtxkku5a5ovgfz.jpg
+Playlist - https://sarigama.lk/playlist/appachchi-thaththa/a35b4d46-0632-458d-88c5-6ef41c39413f
+Artist - https://sarigama.lk/artist/sanuka-wickramasinghe/a22b4ecf-c1c1-4bed-b6aa-77df464bf02d
+Song - https://sarigama.lk/sinhala-song/sanuka-wickramasinghe/dewliye-theme-song/de7c1755-7539-4b9b-966e-2f1f82b914d7
+Search - https://sarigama.lk/api/v1/search/mas/{query}
+'''
 
 def download(song_url=''):
 
@@ -32,10 +49,14 @@ def download(song_url=''):
         if res.status_code == 200:
 
             textRes = res.text
-            PTN = r'(https://sarigama.lk/files/[a-z0-9=\-\?/]+)'
+            PTN = r'(https://sarigama\.lk/files/[a-z0-9=\-\?/]+)'
             reo = re.compile(PTN, flags=re.I)
             songlink = reo.findall(textRes)[0]
 
+            artPTN = r' <meta name="thumbnail" content="([a-z:0-9//\-\.]+)"'
+            art_reo = re.compile(artPTN, flags=re.I)
+            art_url = art_reo.findall(textRes)[0]
+            
             cookies = res.headers['Set-Cookie'].split(';')
             XSRF = cookies[0]
             LRVL = cookies[3].split()[1]
@@ -59,17 +80,31 @@ def download(song_url=''):
                         bar.update(len(data))
                         song.write(data)
                     bar.close()
-
+                
                 if mp3_length != 0 and bar.n != mp3_length:
                     print(Fore.RED+"ERROR, Something went wrong"+Fore.RESET)
 
                 else:
                     print(Fore.GREEN+f'Downloaded {track_name} \n'+Fore.RESET)
-                    main_input()
+                    global failed
+                    failed = False                    
 
             else:
                 print(Fore.RED+f'Error Occured while requesting mp3 : {mp3.status_code}'+Fore.RESET)
                 main_input()
+
+            # Album art downloading
+            if art_url != DEFAULT_ART_URL:
+
+                art = r.get(art_url)
+                if art.status_code == 200:
+
+                    artname = path+'coverart.jpg'
+                    with open(artname, 'wb') as cover:
+                        cover.write(art.content)
+             
+                    setID3(track_name, artname)
+                    os.remove(artname)
 
         else:
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
@@ -80,6 +115,7 @@ def download(song_url=''):
         main_input()
 
 
+# Get download path from user
 def save_path() -> str:
 
     try:
@@ -105,6 +141,21 @@ def save_path() -> str:
         save_path()
 
 
+def setID3(mp3_path:str, cover_art_path:str):
+    
+    title = mp3_path.split(' - ')[0]
+    artist = mp3_path.split(' - ')[1]
+
+    mp3 = eyed3.load(mp3_path)
+    mp3.tag._images.remove('')
+    
+    # 3 is for front cover
+    mp3.tag.images.set(3, open(cover_art_path,'rb').read(), 'image/jpeg')
+    mp3.tag.title = title
+    mp3.tag.artist = artist   
+
+
+# Verify the command entered by user in main input section
 def verify_command(url) -> str:
 
     # 'https://sarigama.lk/artist/sanuka-wickramasinghe/a22b4ecf-c1c1-4bed-b6aa-77df464bf02d'
@@ -119,7 +170,7 @@ def verify_command(url) -> str:
     PLAYLIST_PTN = r'https://sarigama\.lk/playlist/[a-z0-9\-]+/[a-z0-9\-]+'
     playlist_regex = re.compile(PLAYLIST_PTN, flags=re.I)
 
-    searchPTN = r'search ([a-z ]+) (a)?'
+    searchPTN = r'search ([a-z ]+ ?)'
     search_regex = re.compile(searchPTN, flags=re.I)
 
     if artist_regex.match(url):
@@ -146,15 +197,19 @@ def verify_command(url) -> str:
     if url.lower() == 'help':
         return 'Help'
 
+    # Search Query Verify
     if search_regex.match(url):
         qtype = 's'
         qstring = search_regex.findall(url)[0]
-        query = [0]
+        query = qstring
+        
+        if qstring.split()[-1] == 'a':
+            qtype = 'a'
+            query = qstring[:-2]
 
-        if len(qstring) == 2:
-            qtype = qstring[1]
-
-        return 'Search '+query+'-'+qtype
+        global search_ptn
+        search_ptn = query+'-'+qtype        
+        return 'Search'
 
     else:
         return 'Invalid'
@@ -216,26 +271,41 @@ def artist_action(artist_url):
         print('Error:', e)
 
 
+# Validate song number in playlist or artist song list
 def validate_song_no():
 
     try:
         print(Fore.LIGHTGREEN_EX)
-        track_no = input('[+] Song Number:').strip()
+        track_no = input('[+] Song Numbers:').strip().split()
+       
+        global playlist_links
+        global artist_links
 
-        global path
-        path = save_path()
-        
-        if track_no in title_links.keys():
-            download(title_links[track_no][1])
+        if track_no[0].lower() == 'main':            
+            playlist_links.clear()
+            artist_links.clear()
+            main_input()
 
-        elif track_no == '0':
-            for song in title_links.values():
-                link = song[1]
-                download(link)
+        else:        
+            global path
+            path = save_path()             
+                        
+            if track_no[0] == '0':
+                for song in title_links.values():
+                    link = song[1]
+                    download(link)
 
-        else:
-            print(Fore.RED+'[!] Invalid Number\n'+Fore.RESET)
-            validate_song_no()
+            else:
+                for n in track_no:                    
+                    if n in title_links.keys():
+                        download(title_links[n][1])
+
+            if failed:
+                print(Fore.RED+'[!] Invalid Numbers\n'+Fore.RESET)
+                validate_song_no()
+
+            else:
+                main_input()
 
     except KeyboardInterrupt:
         os.system('CLS')
@@ -278,7 +348,7 @@ def extract_playlists():
 # Display help 
 def usage():
     
-    print(Fore.LIGHTYELLOW_EX+'\n ----------------------------------[ HOW TOT USE ]----------------------------------')
+    print(Fore.LIGHTYELLOW_EX+'\n ----------------------------------[ HOW TOT USE ]----------------------------------\n')
     print('   [!] Downloading')
     print("      [!] Enter song url to download song directly.")
     print("      [!] Enter playlist url to download songs in playlist")
@@ -294,7 +364,8 @@ def usage():
     print("      [!] Enter 'search <query> a' to search artist ")
     print("         [!] Ex:- Enter search sar a to search artists starting with 'sar'\n\n")
     print("   [!] Enter 'exit' to exit")
-    print("----------------------------------[ HOW TOT USE ]----------------------------------")
+    print("   [!] Enter 'main' to return to main input")
+    print("\n-------------------------------[ By Hirusha Fernando ]-------------------------------")
 
     main_input()
 
@@ -314,18 +385,21 @@ def playlist_action(playlist_url):
         for k, v in title_links.items():
             print(f'\t{k}.{v[0]} By {v[2]}')
 
-        print(Fore.LIGHTYELLOW_EX +
-              '\n[!] Enter song number that you wish to download. Enter 0 to download all')
+        print('\n[!] Enter song number that you wish to download. Enter 0 to download all')
 
         validate_song_no()
 
     except Exception as e:
-        print('Error:', e, '\n')
+        print(Fore.RED+'Error:', e, '\n')
         main_input()
 
 
 # Validate user input when playlist selection or top artist selection
 def validate_no(artist=False):
+
+    global playlist_links
+    global artist_links
+
 
     param = artist
     check_in = artist_links if artist else playlist_links
@@ -335,8 +409,13 @@ def validate_no(artist=False):
     try:
         print(Fore.LIGHTGREEN_EX)
         n = input(f'[!] {disp} Number : ').strip()
+        
+        if n.lower() == 'main':            
+            playlist_links.clear()
+            artist_links.clear()
+            main_input()
 
-        if not n in check_in.keys():
+        elif not n in check_in.keys():
             print(Fore.RED+'[!] Invalid Number\n'+Fore.RESET)
             validate_no(param)
 
@@ -387,9 +466,9 @@ def invalid():
     main_input()
 
 
-def search(query:str):
-    qstring = query.split()[1].split('-')[0]
-    qtype = query.split()[1].split('-')[1]
+def search():    
+    qstring = search_ptn.split('-')[0]
+    qtype = search_ptn.split('-')[1]
     query_url = f'https://sarigama.lk/api/v1/search/mas/{qstring}'
 
     try:
@@ -398,9 +477,9 @@ def search(query:str):
         if res.status_code == 200:
             json_res = res.json()
             
-            print(Fore.LIGHTYELLOW_EX+'[!] Search Result:')
+            print(Fore.LIGHTYELLOW_EX+'\n[!] Search Result:')
 
-            if qtype == 's'                
+            if qtype == 's' :               
                 songs = json_res['songs']['hits']['hits']
                 for i,song in enumerate(songs, 1):
                     track_info = song['_source']
@@ -433,8 +512,12 @@ def search(query:str):
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
             main_input()
 
+    except KeyboardInterrupt:
+        os.system('CLS')
+        exit()
+
     except Exception as e:
-        pass
+        print(Fore.RED+f'[!] Something went wrong : {e}'+Fore.RESET)
 
 
 # Statring function
@@ -448,7 +531,7 @@ def main_input():
             'Artist': artist_action, 
             'Song': download, 
             'Playlist': playlist_action,
-            'Search':search, 
+            'Search': lambda x: search(),
             'Top': lambda x: top_artist(), 
             'Invalid': lambda x: invalid(),
             'Trending': lambda x: playlist_action(TRENDING_URL), 
@@ -459,7 +542,7 @@ def main_input():
             }
 
         url_status = verify_command(sarigamalk_url)
-        actions[url_status.split()[0]](sarigamalk_url)
+        actions[url_status](sarigamalk_url)
 
     except KeyboardInterrupt:
         os.system('CLS')
@@ -467,12 +550,11 @@ def main_input():
 
 
 if __name__ == '__main__':
-
+    
     os.system('CLS')
-    print(Fore.LIGHTMAGENTA_EX)
-    tprint('Sarigama.LK', "clossal")
+    print(choice([Fore.LIGHTMAGENTA_EX, Fore.LIGHTBLUE_EX, Fore.LIGHTCYAN_EX]))
+    tprint('Sarigama.LK', choice(["clossal", "banner3-d", "georgiall"]))
     print(Fore.RESET)
-
-    print(Fore.LIGHTYELLOW_EX+"[!] Enter 'help' to get help\n")
+    print(Fore.LIGHTYELLOW_EX+"[!] Enter 'help' to get help\n")    
 
     main_input()
