@@ -2,3 +2,4 @@ requests==2.23.0
 tqdm==4.46.0
 art==4.7
 colorama==0.4.3
+eyed3==0.9.5
