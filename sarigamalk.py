@@ -111,7 +111,7 @@ def download(song_url, path):
             main_input()
 
     except KeyboardInterrupt:
-        print(Fore.RED+'[!] Task cancelled by user.'+Fore.RESET)
+        print(Fore.RED+'\n[!] Task cancelled by user.'+Fore.RESET)
         main_input()
 
     except Exception as e:
@@ -534,7 +534,6 @@ def search():
         print(Fore.RED+f'[!] Something went wrong : {e}'+Fore.RESET)
 
 
-# Statring function
 def main_input():
 
     try:
@@ -563,12 +562,15 @@ def main_input():
         exit()
 
 
-if __name__ == '__main__':
-    
+# Statring function
+def display_title():
     os.system('CLS')
     print(choice([Fore.LIGHTMAGENTA_EX, Fore.LIGHTBLUE_EX, Fore.LIGHTCYAN_EX]))
     tprint('Sarigama.LK', choice(["clossal", "banner3-d", "georgiall"]))
     print(Fore.RESET)
-    print(Fore.LIGHTYELLOW_EX+"[!] Enter 'help' to get help\n")    
-
+    print(Fore.LIGHTYELLOW_EX+"[!] Enter 'help' to get help\n")
     main_input()
+
+
+if __name__ == '__main__':    
+    display_title()
