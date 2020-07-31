@@ -21,15 +21,17 @@ Copy and paste song link, artist link, playlist link to download it.
 ### **Download by browsing**
 
 - Enter **playlists** for get list of playlists in <https://sarigama.lk>
-- Enter **trending** for get trending songs list in <https://sarigama.lk>
 - Enter **latest** for get latest songs list in <https://sarigama.lk>
 - Enter **top artists** for get top artists list in <https://sarigama.lk>
+- Enter **trending** for get trending songs list in <https://sarigama.lk>
+![screen4](s4.png)
 
 ### **Download by searching**
 
 - Enter **search {query}** to search song. Like This
     > search sar
   - This will search songs starting with 'sar'
+  ![screen5](s5.png)
 
 - Enter **search {query} a** to search artist. Like This
     > search ami a
