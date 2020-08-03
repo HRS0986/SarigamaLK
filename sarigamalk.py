@@ -93,6 +93,7 @@ def download(song_url, path):
                 main_input()
 
             # Album art downloading
+            artname = ''
             if art_url != DEFAULT_ART_URL:
 
                 art = r.get(art_url)
@@ -101,10 +102,13 @@ def download(song_url, path):
                     artname = path+'coverart.jpg'
                     with open(artname, 'wb') as cover:
                         cover.write(art.content)
-             
-                    setID3(title, artist, artname)
+
+                    setID3(track_name, title, artist, artname)
                     os.remove(artname)
-            main_input()
+            else:
+                setID3(track_name, title, artist, artname)
+
+            # main_input()
 
         else:
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
@@ -145,16 +149,17 @@ def save_path() -> str:
         save_path()
 
 
-def setID3(title:str, artist:str, cover_art_path:str):    
+def setID3(mp3_path:str, title:str, artist:str, cover_art_path:str):    
     
     mp3 = eyed3.load(mp3_path)
-    mp3.tag._images.remove('')
-    
-    # 3 is for front cover
-    mp3.tag.images.set(3, open(cover_art_path,'rb').read(), 'image/jpeg')
+    mp3.tag._images.remove('')   
     mp3.tag.title = title
     mp3.tag.artist = artist
     mp3.tag.album = title
+
+    if cover_art_path: 
+        # 3 is for front cover
+        mp3.tag.images.set(3, open(cover_art_path,'rb').read(), 'image/jpeg')
 
     mp3.tag.save()
 
@@ -222,14 +227,14 @@ def verify_command(url) -> str:
 # Extract song titles from artist/playlist page 
 # Store song title and it's url (and artist if a playlist) in title_links dictionary
 def extract_songs_titles(artist_url, playlist=False):
-
+    
     try:
         res = r.get(artist_url)
 
         if res.status_code == 200:
 
             textRes = res.text
-
+            
             PTN = r'<a target="_blank" href="(https://sarigama.lk/sinhala-song/[a-z0-9\.:\/-]+)'
             reo = re.compile(PTN, flags=re.I)
             songlinks = reo.finditer(textRes)
@@ -242,9 +247,11 @@ def extract_songs_titles(artist_url, playlist=False):
                 title = ' '.join(title2.split('-')).title()
                 
                 if playlist:
-                    artist = ' '.join(title1.split('/')[4].split('-')).title()
-                                    
-                title_links[str(i)] = (title, link.groups()[0], artist)
+                    artist = ' '.join(title1.split('/')[4].split('-')).title()                                    
+                    title_links[str(i)] = (title, link.groups()[0], artist)
+                
+                else:
+                    title_links[str(i)] = (title, link.groups()[0])
 
         else:
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
@@ -308,11 +315,11 @@ def validate_song_no():
                     for song in title_links.values():
                         link = song[1]
                         download(link, path)
-
+                        
                 else:
                     for n in track_no:                    
                         if n in title_links.keys():
-                            download(title_links[n][1], path)
+                            download(title_links[n][1], path)                            
 
                 if failed:
                     print(Fore.RED+'[!] Invalid Numbers\n'+Fore.RESET)
@@ -396,7 +403,7 @@ def playlist_action(playlist_url):
         print('\n[!] Playlist :', playlist)
         print('[!] Available Song List')
 
-        for k, v in title_links.items():
+        for k, v in title_links.items():            
             print(f'\t{k}.{v[0]} By {v[2]}')
 
         print('\n[!] Enter song number that you wish to download. Enter 0 to download all')
@@ -413,7 +420,6 @@ def validate_no(artist=False):
 
     global playlist_links
     global artist_links
-
 
     param = artist
     check_in = artist_links if artist else playlist_links
@@ -433,7 +439,7 @@ def validate_no(artist=False):
             print(Fore.RED+'[!] Invalid Number\n'+Fore.RESET)
             validate_no(param)
 
-        else:
+        else:            
             action(check_in[n][1])
 
     except KeyboardInterrupt:
@@ -493,6 +499,8 @@ def search():
             
             print(Fore.LIGHTYELLOW_EX+'\n[!] Search Result:')
 
+            result_count = 1
+
             if qtype == 's' :               
                 songs = json_res['songs']['hits']['hits']
                 for i,song in enumerate(songs, 1):
@@ -509,7 +517,15 @@ def search():
                     title_links[str(i)] = (title, track_url, track_artists)
 
                     print(f'\t{i}.{title} By {track_artists}')
-                validate_song_no()
+                                
+                if len(title_links) == 0:
+                    result_count = 0
+                    print('[!] Nothing Found')
+                
+                if result_count == 1:
+                    validate_song_no()
+                else:
+                    main_input()
                     
             else:
                 artists = json_res['artists']['hits']['hits']
@@ -520,7 +536,15 @@ def search():
                     artist_links[str(i)] = (name, artist_url)
 
                     print(f'\t{i}.{name}')
-                validate_no(True)
+
+                if len(artist_links) == 0:
+                    result_count = 0
+                    print('[!] Nothing Found')
+
+                if result_count == 1:
+                    validate_no(True)
+                else:
+                    main_input()
 
         else:
             print(Fore.RED+f'Error Occured while requesting given link : {res.status_code}'+Fore.RESET)
@@ -532,6 +556,13 @@ def search():
 
     except Exception as e:
         print(Fore.RED+f'[!] Something went wrong : {e}'+Fore.RESET)
+        main_input()
+
+
+def download_with_direct_link(url):
+    path = save_path()
+    download(url, path)
+    main_input()
 
 
 def main_input():
@@ -542,7 +573,7 @@ def main_input():
 
         actions = {
             'Artist': artist_action, 
-            'Song': download, 
+            'Song': download_with_direct_link, 
             'Playlist': playlist_action,
             'Search': lambda x: search(),
             'Top': lambda x: top_artist(), 
