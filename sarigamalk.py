@@ -6,25 +6,24 @@ from tqdm import tqdm
 from random import choice
 from art import tprint, text2art
 from colorama import init, Fore, Style
+from typing import List, Dict, Tuple
 
 
 # initialize colorama module
 init(convert=True)
 
-title_links = {}
-playlist_links = {}
-artist_links = {}
+title_links: Dict[str, Tuple[str]] = {}
+playlist_links: Dict[str, Tuple[str]] = {}
+artist_links: Dict[str, Tuple[str]] = {}
 
 HOME_URL = 'https://sarigama.lk'
 LATEST_URL = 'https://sarigama.lk/playlist/latest/1a08d372-f979-4654-b180-f04e5e10c336'
 TRENDING_URL = 'https://sarigama.lk/playlist/trending/22adef1a-18c7-40a4-96d5-8f93ea1d7708'
 DEFAULT_ART_URL = 'https://sarigama.lk/img/default/song.png'
 
-CWD = os.getcwd()
-search_ptn = ''
+CWD: str = os.getcwd()
+search_ptn: str = ''
 failed = True
-
-# !!!!!! ID3 Tag Data ISSUE !!!!!!
 
 '''
 Samples
@@ -35,12 +34,12 @@ Song - https://sarigama.lk/sinhala-song/sanuka-wickramasinghe/dewliye-theme-song
 Search - https://sarigama.lk/api/v1/search/mas/{query}
 '''
 
-def download(song_url, path):
+def download(song_url: str, path: str):
 
-    track_data = song_url.split('/')
-    artist = ' '.join(track_data[4].split('-')).title()
-    title = ' '.join(track_data[5].split('-')).title()
-    track_name = f'{title} - {artist}.mp3'
+    track_data: List[str] = song_url.split('/')
+    artist: str = ' '.join(track_data[4].split('-')).title()
+    title: str = ' '.join(track_data[5].split('-')).title()
+    track_name: str = f'{title} - {artist}.mp3'
 
     try:
         res = r.get(song_url)
@@ -50,29 +49,29 @@ def download(song_url, path):
             textRes = res.text
             PTN = r'(https://sarigama\.lk/files/[a-z0-9=\-\?/]+)'
             reo = re.compile(PTN, flags=re.I)
-            songlink = reo.findall(textRes)[0]
+            songlink: str = reo.findall(textRes)[0]
 
             artPTN = r' <meta name="thumbnail" content="([a-z:0-9//\-\.]+)"'
             art_reo = re.compile(artPTN, flags=re.I)
-            art_url = art_reo.findall(textRes)[0]
+            art_url: str = art_reo.findall(textRes)[0]
             
-            cookies = res.headers['Set-Cookie'].split(';')
-            XSRF = cookies[0]
-            LRVL = cookies[3].split()[1]
-            cookies = f'{XSRF};{LRVL};'
-            headers = {'cookie': cookies}
+            cookies: List[str] = res.headers['Set-Cookie'].split(';')
+            XSRF: str = cookies[0]
+            LRVL: str = cookies[3].split()[1]
+            cookies: str = f'{XSRF};{LRVL};'
+            headers: Dict[str, str] = {'cookie': cookies}
 
             mp3 = r.get(songlink, headers=headers, stream=True)
 
             if mp3.status_code == 200:
 
                 mp3_length = int(mp3.headers['content-length'])
-                block_size = 1024
+                block_size: int = 1024
 
                 print(Fore.CYAN+f'\nDownloading {track_name}')
                 bar = tqdm(total=mp3_length, unit='iB', unit_scale=True)
 
-                track_name = path + '\\' + track_name
+                track_name: str = path + '\\' + track_name
                
                 with open(track_name, 'wb') as song:
                     for data in mp3.iter_content(block_size):
@@ -128,7 +127,7 @@ def save_path() -> str:
 
     try:
         print(Fore.LIGHTYELLOW_EX+'[!] Enter path to save mp3. Just press enter to save mp3 in current directory.')
-        path = input(Fore.LIGHTGREEN_EX+'[+] Save Path (without file name) :').strip()
+        path: str = input(Fore.LIGHTGREEN_EX+'[+] Save Path (without file name) :').strip()
 
         if not path:
             return CWD
@@ -165,7 +164,7 @@ def setID3(mp3_path:str, title:str, artist:str, cover_art_path:str):
 
 
 # Verify the command entered by user in main input section
-def verify_command(url) -> str:
+def verify_command(url: str) -> str:
 
     # 'https://sarigama.lk/artist/sanuka-wickramasinghe/a22b4ecf-c1c1-4bed-b6aa-77df464bf02d'
     ARTIST_PTN = r'https://sarigama\.lk/artist/[a-z0-9\-]+/[a-z0-9\-]+'
@@ -209,7 +208,7 @@ def verify_command(url) -> str:
     # Search Query Verify
     if search_regex.match(url):
         qtype = 's'
-        qstring = search_regex.findall(url)[0]
+        qstring: str = search_regex.findall(url)[0]
         query = qstring
         
         if qstring.split()[-1] == 'a':
@@ -217,7 +216,7 @@ def verify_command(url) -> str:
             query = qstring[:-2]
 
         global search_ptn
-        search_ptn = query+'-'+qtype        
+        search_ptn: str = query+'-'+qtype        
         return 'Search'
 
     else:
@@ -226,7 +225,7 @@ def verify_command(url) -> str:
 
 # Extract song titles from artist/playlist page 
 # Store song title and it's url (and artist if a playlist) in title_links dictionary
-def extract_songs_titles(artist_url, playlist=False):
+def extract_songs_titles(artist_url: str, playlist: bool = False):
     
     try:
         res = r.get(artist_url)
@@ -242,12 +241,12 @@ def extract_songs_titles(artist_url, playlist=False):
             global title_links
             
             for i, link in enumerate(songlinks, 1):
-                title1 = link.groups()[0]
-                title2 = title1.split('/')[5]
-                title = ' '.join(title2.split('-')).title()
+                title1: str = link.groups()[0]
+                title2: str = title1.split('/')[5]
+                title: str = ' '.join(title2.split('-')).title()
                 
                 if playlist:
-                    artist = ' '.join(title1.split('/')[4].split('-')).title()                                    
+                    artist: str = ' '.join(title1.split('/')[4].split('-')).title()                                    
                     title_links[str(i)] = (title, link.groups()[0], artist)
                 
                 else:
@@ -262,9 +261,9 @@ def extract_songs_titles(artist_url, playlist=False):
 
 
 # Display artist's songs and perform downloads
-def artist_action(artist_url):
+def artist_action(artist_url: str):
 
-    artist = ' '.join(artist_url.split('/')[4].split('-')).title()
+    artist: str = ' '.join(artist_url.split('/')[4].split('-')).title()
 
     try:
         extract_songs_titles(artist_url)
@@ -308,7 +307,7 @@ def validate_song_no():
             else:
 
                 global path
-                path = save_path()
+                path: str = save_path()
 
                         
                 if track_no[0] == '0':
@@ -350,9 +349,8 @@ def extract_playlists():
 
             print(Fore.LIGHTYELLOW_EX+'[!] Playlists From Sarigama.LK')
             for i, link in enumerate(pl, 1):
-                playlist_url = link.groups()[0]
-                playlist_name = ' '.join(
-                    playlist_url.split('/')[4].split('-')).title()
+                playlist_url: str = link.groups()[0]
+                playlist_name: str = ' '.join(playlist_url.split('/')[4].split('-')).title()
                 no = str(i)
                 playlist_links[no] = (playlist_name, playlist_url)
                 print(f'\t{no}.{playlist_name}')
@@ -392,9 +390,9 @@ def usage():
 
 
 # Display playlists's songs and perform downloads
-def playlist_action(playlist_url):
+def playlist_action(playlist_url: str):
 
-    playlist = ' '.join(playlist_url.split('/')[4].split('-')).title()
+    playlist: str = ' '.join(playlist_url.split('/')[4].split('-')).title()
 
     try:
         extract_songs_titles(playlist_url, True)
@@ -416,15 +414,15 @@ def playlist_action(playlist_url):
 
 
 # Validate user input when playlist selection or top artist selection
-def validate_no(artist=False):
+def validate_no(artist: bool = False):
 
     global playlist_links
     global artist_links
 
     param = artist
-    check_in = artist_links if artist else playlist_links
+    check_in: dict = artist_links if artist else playlist_links
     action = artist_action if artist else playlist_action
-    disp = 'Artist' if artist else 'Playlist'
+    disp: str = 'Artist' if artist else 'Playlist'
 
     try:
         print(Fore.LIGHTGREEN_EX)
@@ -465,8 +463,8 @@ def top_artist():
 
             print(Fore.LIGHTYELLOW_EX+'[!] Top Artists On Sarigama.LK')
             for i, artist in enumerate(artists, 1):
-                artist_url = artist.groups()[0]
-                name = ' '.join(artist_url.split('/')[4].split('-')).title()
+                artist_url: str = artist.groups()[0]
+                name: str = ' '.join(artist_url.split('/')[4].split('-')).title()
                 no = str(i)
                 artist_links[no] = (name, artist_url)
                 print(f'\t{i}.{name}')
@@ -487,8 +485,8 @@ def invalid():
 
 
 def search():    
-    qstring = search_ptn.split('-')[0]
-    qtype = search_ptn.split('-')[1]
+    qstring: str = search_ptn.split('-')[0]
+    qtype: str = search_ptn.split('-')[1]
     query_url = f'https://sarigama.lk/api/v1/search/mas/{qstring}'
 
     try:
@@ -502,18 +500,18 @@ def search():
             result_count = 1
 
             if qtype == 's' :               
-                songs = json_res['songs']['hits']['hits']
+                songs: List[dict] = json_res['songs']['hits']['hits']
                 for i,song in enumerate(songs, 1):
-                    track_info = song['_source']
-                    title = track_info['title']
-                    track_url = track_info['url']
+                    track_info: dict = song['_source']
+                    title: str = track_info['title']
+                    track_url: str = track_info['url']
                     track_artist_data = track_info['main_artists']
                     track_artists = []
 
                     for x in track_artist_data:
                         track_artists.append(x['name'])
 
-                    track_artists = ' And '.join(track_artists)
+                    track_artists: str = ' And '.join(track_artists)
                     title_links[str(i)] = (title, track_url, track_artists)
 
                     print(f'\t{i}.{title} By {track_artists}')
@@ -528,11 +526,11 @@ def search():
                     main_input()
                     
             else:
-                artists = json_res['artists']['hits']['hits']
+                artists: List[dict] = json_res['artists']['hits']['hits']
                 for i,artist in  enumerate(artists, 1):
-                    artist_info = artist['_source']
-                    name = artist_info['name']
-                    artist_url = artist_info['url']
+                    artist_info: dict = artist['_source']
+                    name: str = artist_info['name']
+                    artist_url: str = artist_info['url']
                     artist_links[str(i)] = (name, artist_url)
 
                     print(f'\t{i}.{name}')
@@ -559,8 +557,8 @@ def search():
         main_input()
 
 
-def download_with_direct_link(url):
-    path = save_path()
+def download_with_direct_link(url: str):
+    path: str = save_path()
     download(url, path)
     main_input()
 
