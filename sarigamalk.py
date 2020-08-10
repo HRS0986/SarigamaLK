@@ -4,6 +4,7 @@ import eyed3
 import requests as r
 from tqdm import tqdm
 from random import choice
+from threading import Thread
 from art import tprint, text2art
 from colorama import init, Fore, Style
 from typing import List, Dict, Tuple
@@ -47,13 +48,24 @@ def download(song_url: str, path: str):
         if res.status_code == 200:
 
             textRes = res.text
-            PTN = r'(https://sarigama\.lk/files/[a-z0-9=\-\?/]+)'
-            reo = re.compile(PTN, flags=re.I)
-            songlink: str = reo.findall(textRes)[0]
-
+            
             artPTN = r' <meta name="thumbnail" content="([a-z:0-9//\-\.]+)"'
             art_reo = re.compile(artPTN, flags=re.I)
             art_url: str = art_reo.findall(textRes)[0]
+
+            # Album art downloading
+            art_name = ''
+            art_name = path+'coverart.jpg'
+
+            # if art_url != DEFAULT_ART_URL:
+            thread = Thread(target=download_art, args=(art_url, path, art_name))
+            thread.start()
+
+            # download_art(art_url, path, art_name)                        
+
+            PTN = r'(https://sarigama\.lk/files/[a-z0-9=\-\?/]+)'
+            reo = re.compile(PTN, flags=re.I)
+            songlink: str = reo.findall(textRes)[0]
             
             cookies: List[str] = res.headers['Set-Cookie'].split(';')
             XSRF: str = cookies[0]
@@ -83,29 +95,19 @@ def download(song_url: str, path: str):
                     print(Fore.RED+"ERROR, Something went wrong"+Fore.RESET)
 
                 else:
+                    thread.join()
+                    setID3(track_name, title, artist, art_name)
+
+                    if art_url != DEFAULT_ART_URL:                
+                        os.remove(art_name)
+
                     print(Fore.GREEN+f'Downloaded {track_name} \n'+Fore.RESET)
                     global failed
-                    failed = False                    
+                    failed = False
 
             else:
                 print(Fore.RED+f'Error Occured while requesting mp3 : {mp3.status_code}'+Fore.RESET)
-                main_input()
-
-            # Album art downloading
-            artname = ''
-            if art_url != DEFAULT_ART_URL:
-
-                art = r.get(art_url)
-                if art.status_code == 200:
-
-                    artname = path+'coverart.jpg'
-                    with open(artname, 'wb') as cover:
-                        cover.write(art.content)
-
-                    setID3(track_name, title, artist, artname)
-                    os.remove(artname)
-            else:
-                setID3(track_name, title, artist, artname)
+                main_input()            
 
             # main_input()
 
@@ -120,6 +122,18 @@ def download(song_url: str, path: str):
     except Exception as e:
         print(Fore.RED+f'Somthing went wrong : {e}'+Fore.RESET)
         main_input()
+
+
+def download_art(art_url: str, path: str, art_name: str):
+    try:
+        if art_url != DEFAULT_ART_URL:
+            art = r.get(art_url)
+            if art.status_code == 200:
+                with open(art_name, 'wb') as cover:
+                    cover.write(art.content)
+ 
+    except Exception as e:
+        pass
 
 
 # Get download path from user
@@ -216,7 +230,7 @@ def verify_command(url: str) -> str:
             query = qstring[:-2]
 
         global search_ptn
-        search_ptn: str = query+'-'+qtype        
+        search_ptn = query+'-'+qtype        
         return 'Search'
 
     else:
@@ -307,7 +321,7 @@ def validate_song_no():
             else:
 
                 global path
-                path: str = save_path()
+                path = save_path()
 
                         
                 if track_no[0] == '0':
